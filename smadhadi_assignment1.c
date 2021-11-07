@@ -33,8 +33,8 @@
 #include <stdbool.h>
 
 
-//#include "../include/global.h"
-//#include "../include/logger.h"
+#include "../include/global.h"
+#include "../include/logger.h"
 
 struct client *logged_in_client_list_head;
 int server_descriptor_global = -1;
@@ -117,10 +117,10 @@ struct client* find_client_node_by_ip(char* ip);
 
 int main(int argc, char **argv) {
 	/*Init. Logger*/
-	//cse4589_init_log(argv[2]);
+	cse4589_init_log(argv[2]);
 
 	/*Clear LOGFILE*/
-	//fclose(fopen(LOGFILE, "w"));
+	fclose(fopen(LOGFILE, "w"));
 
 	/*Start Here*/
 	if(argc != 3) {
@@ -305,7 +305,7 @@ void print_statistics() {
 	int list_id=1;
 	struct client* node = logged_in_client_list_head;
 	while(node!=NULL) {
-		printf("%-5d%-35s%-8d%-8d%-8s\n", list_id++, node->hostname, node->num_msgs_sent, node->num_msgs_recv, (node->is_loggedin)?"logged-in":"logged-out");
+		cse4589_print_and_log("%-5d%-35s%-8d%-8d%-8s\n", list_id++, node->hostname, node->num_msgs_sent, node->num_msgs_recv, (node->is_loggedin)?"logged-in":"logged-out");
 		node=node->next;
 	}
 }
@@ -458,7 +458,7 @@ void print_list(char *buffer) {
 		hostname = strtok(NULL, " ");
 		ip_addr = strtok(NULL, " ");
 		port_num = strtok(NULL, " ");
-		printf("%-5d%-35s%-20s%-8d\n", atoi(list_id), hostname, ip_addr, atoi(port_num));
+		cse4589_print_and_log("%-5d%-35s%-20s%-8d\n", atoi(list_id), hostname, ip_addr, atoi(port_num));
 		i++;
 	} while(buffer != NULL);
 }
@@ -468,7 +468,7 @@ void list_cmd_server() {
 	int list_id = 1;
 	while(temp != NULL) {
 		if(temp->is_loggedin)
-		printf("%-5d%-35s%-20s%-8d\n", list_id++, temp->hostname, temp->ip, atoi(temp->port));
+		cse4589_print_and_log("%-5d%-35s%-20s%-8d\n", list_id++, temp->hostname, temp->ip, atoi(temp->port));
 		temp=temp->next;
 	}
 }
@@ -729,7 +729,7 @@ void handle_client_msg(char *action, char *msg) {
 		}
 	} else {
 		print_success("RECEIVED");
-		printf("msg from:%s\n[msg]:%s\n", action, msg);
+		cse4589_print_and_log("msg from:%s\n[msg]:%s\n", action, msg);
 		print_end("RECEIVED");
 	}
 }
@@ -753,24 +753,24 @@ char* remaining_msg() {
 
 void print(char *action, char *message, bool status) {
 	if(status) {
-		printf("[%s:SUCCESS]\n", action);
-		printf("%s\n", message);
+		cse4589_print_and_log("[%s:SUCCESS]\n", action);
+		cse4589_print_and_log("%s\n", message);
 	} else {
-		printf("[%s:ERROR]\n", action);
+		cse4589_print_and_log("[%s:ERROR]\n", action);
 	}
-	printf("[%s:END]\n", action);
+	cse4589_print_and_log("[%s:END]\n", action);
 }
 
 void print_success(char *action) {
-	printf("[%s:SUCCESS]\n", action);
+	cse4589_print_and_log("[%s:SUCCESS]\n", action);
 }
 
 void print_error(char *action) {
-	printf("[%s:ERROR]\n", action);
+	cse4589_print_and_log("[%s:ERROR]\n", action);
 }
 
 void print_end(char *action) {
-	printf("[%s:END]\n", action);
+	cse4589_print_and_log("[%s:END]\n", action);
 }
 
 char* get_host_ip_address() {
