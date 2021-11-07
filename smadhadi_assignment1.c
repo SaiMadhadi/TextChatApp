@@ -38,6 +38,8 @@
 
 struct client *logged_in_client_list_head;
 int server_descriptor_global = -1;
+bool list_await = false;
+char logged_in_client_list[256];
 void server(int socket_descriptor, char* port);
 void client(int socket_descriptor, char* port);
 void print(char *action, char *message, bool status);
@@ -45,12 +47,12 @@ char* get_host_ip_address();
 void author_cmd();
 void port_cmd(char *port);
 void ip_cmd();
-int login_cmd();
+int login_cmd(fd_set *master_list, int cmax);
 void send_cmd();
 void receive_cmd(int i);
 void receive_cmd_server(int client_descriptor, fd_set *master_list);
 void logout_cmd(fd_set *master_list);
-void exit_cmd();
+void exit_cmd(fd_set *master_list);
 void list_cmd_server();
 void handle_server_msg(int client_descriptor, char *received_message);
 void handle_client_msg(char *action, char *msg);
@@ -59,10 +61,21 @@ void send_list(int client_descriptor);
 void print_list(char *buffer);
 char* remaining_msg();
 void req_for_list();
+void send_port(char* port);
+void print_success(char *action);
+void print_error(char *action);
+void print_end(char *action);
+void print_statistics();
+int send_prevalidations(char *msg);
+int check_in_logged_in_list(char *ip);
+int ip_validation(char* ip);
+int port_validation(char* ip);
+int valid_part(char *ipv);
 
-struct client* create_client_node(int descriptor, char *hostname, char *ip_address, char *port);
+struct client* create_client_node(int descriptor, char *hostname, char *ip_address, char *port,  bool is_loggedin);
 void insert_to_logged_in_clients(struct client* new_client);
 struct client* find_client_node_by_descriptor(int descriptor);
+struct client* find_client_node_by_ip(char* ip);
 
 
 /**
@@ -96,6 +109,9 @@ struct client* find_client_node_by_descriptor(int descriptor);
 	 char hostname[30];
 	 char ip[30];
 	 char port[10];
+	 int num_msgs_recv;
+	 int num_msgs_sent;
+	 bool is_loggedin;
 	 struct client *next;
  };
 
@@ -146,28 +162,28 @@ int main(int argc, char **argv) {
 }
 
 void server(int host_socket_descriptor, char* port) {
-	printf("I am server...!!! \n");
+	// printf("I am server...!!! \n");
 	fd_set master_list, watch_list;
 	FD_ZERO(&master_list);
 	FD_ZERO(&watch_list);
 	FD_SET(0, &master_list);
 	FD_SET(host_socket_descriptor, &master_list);
 	int cmax = host_socket_descriptor;
-	int client_descriptor_global;
+	//int client_descriptor_global;
 	while(1) {
 		watch_list = master_list;
 		if(select(cmax+1, &watch_list, NULL, NULL, NULL) < 0) {
-			printf("%s\n", "Error occured");
+			// printf("%s\n", "Error occured");
 		} else {
 			for(int i = 0; i <= cmax+1; i++) {
 				if(FD_ISSET(i, &watch_list)) {
 					if(i == 0) {
-						char input[100];
-						if(fgets(input,100, stdin) == 0) {
-							printf("%s\n", "No Input");
+						char input[256];
+						if(fgets(input, 256, stdin) == 0) {
+							// printf("%s\n", "No Input");
 							break;
 						} else {
-							printf("Given command :: %s\n", input);
+							// printf("Given command :: %s\n", input);
 							char *action = strtok(input, " ");
 							if (strcmp(action, "AUTHOR\n") == 0) {
 								author_cmd();
@@ -177,30 +193,35 @@ void server(int host_socket_descriptor, char* port) {
 								ip_cmd();
 							} else if(strcmp(action, "LIST\n") == 0) {
 								list_cmd_server();
+							} else if(strcmp(action, "STATISTICS\n") == 0) {
+								print_statistics();
 							} else if(strcmp(action, "EXIT\n") == 0) {
-								exit_cmd();
+								//exit_cmd();
+								print_success("EXIT");
+								print_end("EXIT");
+								exit(0);
 							}
 						}
 					} else if (i == host_socket_descriptor) {
 						// accept connections
-						printf("%s\n", "Accepting new connections...");
+						// printf("%s\n", "Accepting new connections...");
 						struct sockaddr_in client_addr;
 						int caddr_len = sizeof(client_addr);
 						int client_descriptor = accept(host_socket_descriptor, (struct sockaddr *)&client_addr, (socklen_t*)&caddr_len);
-						client_descriptor_global = client_descriptor;
+						//client_descriptor_global = client_descriptor;
 						FD_SET(client_descriptor, &master_list);
-						printf("%s\n", "Server accepted client connection...!!!");
+						// printf("%s\n", "Server accepted client connection...!!!");
 						char ipv4[20];
 						inet_ntop(AF_INET, &(client_addr.sin_addr), ipv4, INET_ADDRSTRLEN);
-						printf("Client IP : %s, Port : %d, %d\n", ipv4, client_addr.sin_port, ntohs(client_addr.sin_port));
+						// printf("Client IP : %s, Port : %d, %d\n", ipv4, client_addr.sin_port, ntohs(client_addr.sin_port));
 						if(client_descriptor > cmax)
 							cmax = client_descriptor;
 						struct hostent *host = gethostbyaddr(&(client_addr.sin_addr), sizeof(client_addr.sin_addr), AF_INET);
-					  printf("Host name: %s\n", host->h_name);
-						struct client* new_client = create_client_node(client_descriptor, host->h_name ,ipv4, "8080");
+					  // printf("Host name: %s\n", host->h_name);
+						struct client* new_client = create_client_node(client_descriptor, host->h_name ,ipv4, "8080", true);
 						insert_to_logged_in_clients(new_client);
-						send_list(client_descriptor);
-					} else if(i == client_descriptor_global){
+						//send_list(client_descriptor);
+					} else {
 						// receive, parse and send.
 						receive_cmd_server(i, &master_list);
 					}
@@ -220,17 +241,20 @@ void client(int host_socket_descriptor, char* port) {
 	while(1) {
 		watch_list = master_list;
 		if(select(cmax+1, &watch_list, NULL, NULL, NULL) < 0) {
-			printf("%s\n", "Error occured");
+			// printf("%s\n", "Error occured");
 		} else {
 				for(int i = 0; i <= cmax+1; i++) {
 					if(FD_ISSET(i, &watch_list)) {
 						if(i == 0) {
-							char input[100];
-							if(fgets(input, 100, stdin) == 0) {
-								printf("%s\n", "No Input");
+							char input[256];
+							if(fgets(input, 256, stdin) == 0) {
+								//printf("%s\n", "No Input");
 								break;
 							} else {
-								printf("Given command :: %s\n", input);
+								//printf("Given command :: %s\n", input);
+								char input_dup[256];
+								strcpy(input_dup, input);
+								// printf("INPUT_DUP IS %s\n", input_dup);
 								char *action = strtok(input, " ");
 								if (strcmp(action, "AUTHOR\n") == 0) {
 									author_cmd();
@@ -239,19 +263,33 @@ void client(int host_socket_descriptor, char* port) {
 								} else if (strcmp(action, "IP\n") == 0) {
 									ip_cmd();
 								} else if (strcmp(action, "LOGIN") == 0) {
-									cmax = login_cmd(&master_list, cmax);
-									//send_port();
-									//req_for_list();
+									int temp = login_cmd(&master_list, cmax);
+									if(temp != -1) {
+										if(temp>cmax)
+											cmax = temp;
+										send_port(port);
+									}
 								} else if (strcmp(action, "SEND") == 0) {
-									send_cmd();
+									send_cmd(input_dup);
 								} else if(strcmp(action, "LIST\n") == 0) {
-									//send_cmd();
+									if(strlen(logged_in_client_list) == 0) {
+										print("LIST", " " ,0);
+									} else {
+										char list_temp[256];
+										strcpy(list_temp, logged_in_client_list);
+										print_success("LIST");
+										print_list(list_temp);
+										print_end("LIST");
+									}
+								} else if(strcmp(action, "REFRESH\n") == 0) {
 									req_for_list();
+									list_await = true;
 								} else if(strcmp(action, "LOGOUT\n") == 0) {
 									logout_cmd(&master_list);
 								} else if(strcmp(action, "EXIT\n") == 0) {
-									exit_cmd();
+									exit_cmd(&master_list);
 								}
+
 							}
 						} else if (i == server_descriptor_global){
 								// Handle recv returning <0, i..e. recv failed.
@@ -263,29 +301,56 @@ void client(int host_socket_descriptor, char* port) {
 	}
 }
 
+void print_statistics() {
+	int list_id=1;
+	struct client* node = logged_in_client_list_head;
+	while(node!=NULL) {
+		printf("%-5d%-35s%-8d%-8d%-8s\n", list_id++, node->hostname, node->num_msgs_sent, node->num_msgs_recv, (node->is_loggedin)?"logged-in":"logged-out");
+		node=node->next;
+	}
+}
+
+void send_port(char* port) {
+	char message[20];
+	strcat(message, "PORT ");
+	strcat(message, port);
+	if(send(server_descriptor_global, message, sizeof(message), 0) == -1){
+		// printf("send failed\n");
+	} else {
+		// printf("%s\n", "Port sent..!!!");
+	}
+}
+
 void req_for_list() {
 	char* action = "LIST\n";
 	if(server_descriptor_global == -1) {
-		printf("%s\n", "You are not logged in...!!!");
+		//printf("%s\n", "You are not logged in...!!!");
+		print_error("REFRESH");
+		print_end("REFRESH");
 	} else {
 		if(send(server_descriptor_global, action, strlen(action), 0) == -1) {
-			printf("%s\n", "Send Failed...!!!");
+			//printf("%s\n", "Send Failed...!!!");
+			print_error("REFRESH");
+			print_end("REFRESH");
 		} else {
-			printf("%s\n", "Message sent...!!!");
+			//printf("%s\n", "Message sent...!!!");
 		}
 	}
 }
 
 void receive_cmd_server(int client_descriptor, fd_set *master_list) {
-	printf("%s\n", "Receiving messages...");
+	// printf("%s\n", "Receiving messages...");
 	char *received_message = (char *)malloc(sizeof(char)*1024);
 	int recv_ret = recv(client_descriptor, received_message, 1024, 0);
-	printf("Received message : %s\n", received_message);
+	// printf("Received message : %s\n", received_message);
 	if(recv_ret < 0) {
-			printf("%s\n", "receive failed");
+			// printf("%s\n", "receive failed");
 	} else if(recv_ret == 0) {
 		// Loggedout
+		// change is_loggedin to 0;
 		FD_CLR(client_descriptor, master_list);
+		find_client_node_by_descriptor(client_descriptor)->is_loggedin = false;
+		// printf("client %d logged out\n", client_descriptor);
 	} else {
 		handle_server_msg(client_descriptor, received_message);
 	}
@@ -296,58 +361,83 @@ void handle_server_msg(int client_descriptor, char *received_message) {
 	//char *action = strtok(received_message, " ");
 	//printf("action is : %s\n", received_message);
 	if(strcmp(received_message, "LIST\n") == 0) {
-		printf("%s\n", "SENDING LIST");
+		// printf("%s\n", "SENDING LIST");
 		send_list(client_descriptor);
 	} else if(strcmp(received_message, "REFRESH\n") == 0) {
 		send_list(client_descriptor);
-	}
+	//}
 	// else if(strcmp(action, "BROADCAST") == 0) {
 	//
 	// } else if(strcmp(action, "BLOCK") == 0) {
 	//
 	// } else if(strcmp(action, "UNBLOCK") == 0) {
 	//
-	// } else if(strcmp(action, "PORT") == 0) {
-	//
-	// } else {
-	// 	// Send to another client
-	// }
+	} else {
+		// Send to another client
+		char recv_msg_dup[256];
+		strcpy(recv_msg_dup, received_message);
+		char *action = strtok(received_message, " ");
+		// printf("%s, %d\n", action, strcmp(action, "PORT"));
+		if(strcmp(action, "PORT") == 0) {
+			struct client* cl = find_client_node_by_descriptor(client_descriptor);
+			char* port_num = strtok(NULL, " ");
+			strcpy(cl->port, port_num);
+			send_list(client_descriptor);
+		} else {
+			// char *dest_ip = strtok(NULL, " ");;
+			// char *msg = remaining_msg();
+			struct client* dest = find_client_node_by_ip(action);
+			int dest_cli_desc = dest->descriptor;
+			find_client_node_by_descriptor(client_descriptor)->num_msgs_sent++;
+			if(send(dest_cli_desc, recv_msg_dup, strlen(recv_msg_dup), 0) < 0) {
+				// printf("%s\n", "Delivery to client failed\n");
+			} else {
+				// printf("%s\n", "Delivered to client...");
+				dest->num_msgs_recv++;
+			}
+			// free(msg);
+		}
+	}
 }
 
 void send_list(int client_descriptor) {
-	printf("%s\n", "Sending list to server");
+	// printf("%s\n", "Sending list to server");
 	struct client* temp = logged_in_client_list_head;
-	char buffer[1024];
+	// char buffer[1024];
+	char *buffer = (char *)malloc(sizeof(char)*1024);
 	int i = 1;
 	strcat(buffer, "LIST ");
 	while(temp != NULL){
-		if(i==1){
-			strcat(buffer,"1");
-		} else if(i==2){
-			strcat(buffer,"2");
-		} else if(i==3){
-			strcat(buffer,"3");
-		} else if(i==4){
-			strcat(buffer,"4");
+		if(temp->is_loggedin) {
+			if(i == 1){
+				strcat(buffer,"1");
+			} else if(i == 2){
+				strcat(buffer,"2");
+			} else if(i == 3){
+				strcat(buffer,"3");
+			} else if(i == 4){
+				strcat(buffer,"4");
+			}
+			strcat(buffer," ");
+			strcat(buffer,temp->hostname);
+			strcat(buffer," ");
+			strcat(buffer,temp->ip);
+			strcat(buffer," ");
+			strcat(buffer,temp->port);
+			strcat(buffer," ");
+			i++;
 		}
-		strcat(buffer," ");
-		strcat(buffer,temp->hostname);
-		strcat(buffer," ");
-		strcat(buffer,temp->ip);
-		strcat(buffer," ");
-		strcat(buffer,temp->port);
-		strcat(buffer," ");
-		i++;
 		temp=temp->next;
 	}
-	printf("%s\n", buffer);
+	// printf("sending list : %s\n", buffer);
 	int srv = send(client_descriptor, buffer, strlen(buffer), 0);
+	free(buffer);
 	if(srv == -1){
-		printf("send failed\n");
+		// printf("send failed\n");
 	} else if (srv == 0) {
-		printf("%s\n", "nothing sent");
+		// printf("%s\n", "nothing sent");
 	} else {
-		printf("%s\n", "List sent...!!!");
+		// printf("%s\n", "List sent...!!!");
 	}
 }
 
@@ -377,6 +467,7 @@ void list_cmd_server() {
 	struct client *temp = logged_in_client_list_head;
 	int list_id = 1;
 	while(temp != NULL) {
+		if(temp->is_loggedin)
 		printf("%-5d%-35s%-20s%-8d\n", list_id++, temp->hostname, temp->ip, atoi(temp->port));
 		temp=temp->next;
 	}
@@ -408,82 +499,238 @@ void ip_cmd() {
 
 int login_cmd(fd_set *master_list, int cmax) {
 	char *server_ip = strtok(NULL, " ");
-	char *server_port = strtok(NULL, " ");
+	char *server_port = strtok(strtok(NULL, " "), "\n");
+	// validations
+	char server_ip_dup[256], server_port_dup[256];
+	strcpy(server_ip_dup, server_ip);
+	strcpy(server_port_dup, server_port);
+	// printf("server port:%s\n", server_port_dup);
+	if(!(ip_validation(server_ip_dup) && port_validation(server_port_dup))) {
+		print_error("LOGIN");
+		print_end("LOGIN");
+		return -1;
+	}
 	int server_descriptor = socket(AF_INET, SOCK_STREAM, 0);
 	server_descriptor_global = server_descriptor;
 	FD_SET(server_descriptor, master_list);
 	if(server_descriptor > cmax)
-		cmax=server_descriptor;
-	printf("Logging in now... server Ip : %s & server port %s\n", server_ip, server_port);
+		cmax = server_descriptor;
+	//printf("Logging in now... server Ip : %s & server port %s\n", server_ip, server_port);
 	struct sockaddr_in server_addr;
 	server_addr.sin_family = AF_INET;
 	server_addr.sin_port = htons(atoi(server_port));
 	inet_pton(AF_INET, server_ip, &(server_addr.sin_addr));
 	if (connect(server_descriptor, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0){
-		printf("%s\n", "Connect Failed...!!!!");
+		// printf("%s\n", "Connect Failed...!!!!");
+		print_error("LOGIN");
+		print_end("LOGIN");
 	} else {
-		printf("%s\n", "Connected successfully");
+		print_success("LOGIN");
+		print_end("LOGIN");
+		// printf("%s\n", "Connected successfully");
 	}
 	return cmax;
 }
 
-void send_cmd() {
+void send_cmd(char input_dup[]) {
 	// Send message properly
-	char *token;
-	int flag=0;
-	char *msg = (char *)malloc(sizeof(char)*1024);
-	do {
-		token = strtok(NULL, " ");
-		if(token == NULL)
-			break;
-		if(flag) {
-			strcat(msg, " ");
-		}
-		strcat(msg, token);
-		flag = 1;
-	} while(token != NULL);
-	printf("Message to be sent is : %s",msg);
+	// char *token;
+	// int flag=0;
+	// char *msg = (char *)malloc(sizeof(char)*1024);
+	// do {
+	// 	token = strtok(NULL, " ");
+	// 	if(token == NULL)
+	// 		break;
+	// 	if(flag) {
+	// 		strcat(msg, " ");
+	// 	}
+	// 	strcat(msg, token);
+	// 	flag = 1;
+	// } while(token != NULL);
+	// printf("input_dup is %s, %d\n", input_dup, strlen(input_dup));
+	char msg[256];
+	int i = 0;
+	while(input_dup[i+5] != '\0') {
+		msg[i] = input_dup[i+5];
+		i++;
+	}
+	msg[i-1]='\0';
+	// printf("Message to be sent is : %s, len : %d\n", msg, strlen(msg));
+	char *msg_dup = (char *)malloc(sizeof(char)*1024);
+	strcpy(msg_dup, msg);
+
 	if(server_descriptor_global == -1) {
-		printf("%s\n", "You are not logged in...!!!");
+		// printf("%s\n", "You are not logged in...!!!");
+		print_error("SEND");
+		print_end("SEND");
 	} else {
-		if(send(server_descriptor_global, msg, strlen(msg), 0) == -1) {
-				printf("%s\n", "Send Failed...!!!");
+		if(send_prevalidations(msg_dup)) {
+			// printf("Message to be sent is : %s, len : %d\n", msg, strlen(msg));
+			if(send(server_descriptor_global, msg, strlen(msg), 0) == -1) {
+					// printf("%s\n", "Send Failed...!!!");
+					print_error("SEND");
+					print_end("SEND");
+			} else {
+				// printf("%s\n", "Message sent...!!!");
+				print_success("SEND");
+				print_end("SEND");
+			}
 		} else {
-			printf("%s\n", "Message sent...!!!");
+			print_error("SEND");
+			print_end("SEND");
 		}
 	}
-	free(msg);
+
+	// free(msg);
+	free(msg_dup);
 }
+
+int send_prevalidations(char *msg) {
+	// printf("ENTERED PREVALIDATIONS OF SEND\n");
+	char *ip = strtok(msg, " ");
+	char *ip_dup = (char *)malloc(sizeof(char)*256);
+	strcpy(ip_dup, ip);
+	// printf("IP is : %s\n", ip);
+	return ip_validation(ip) && check_in_logged_in_list(ip_dup);
+}
+
+int valid_part(char *ipv) {
+
+	int size = strlen(ipv);
+	if(size > 3) return 0;
+	// digit check
+	for(int i=0;i<size;i++){
+		if(!(ipv[i] >= '0' && ipv[i] <= '9')){
+			return 0;
+		}
+	}
+	// value check
+	if(!(atoi(ipv) >= 0 && atoi(ipv) <= 255)){
+		return 0;
+	}
+
+	return 1;
+}
+
+int ip_validation(char* ip) {
+	int dots_count = 0;
+    if(ip == NULL) return 0;
+	char *ipv = strtok(ip,".");
+	while(ipv != NULL){
+	  if(valid_part(ipv)){
+	  	ipv = strtok(NULL,".");
+	  	if(ipv != NULL){
+	  	  ++dots_count;
+	  	}
+	  } else{
+	  	return 0;
+	  }
+	}
+	if(dots_count != 3){
+		return 0;
+	}
+	// printf("%s\n", "IP VALIDATION PASSED");
+	return 1;
+}
+
+int port_validation(char *port) {
+	// printf("port is %d\n", atoi(port));
+	int size = strlen(port);
+	if(size > 5) return 0;
+	// digit check
+	for(int i=0;i<size;i++){
+		if(!(port[i] >= '0' && port[i] <= '9')){
+			// printf("FAILED IN DIGIT CHECK :%c\n", port[i]);
+			return 0;
+		}
+	}
+	if(!(atoi(port) >= 0 && atoi(port) <= 65535)){
+		return 0;
+	}
+	return 1;
+}
+
+int check_in_logged_in_list(char *ip) {
+	char logged_in_client_list_dup[256];
+	strcpy(logged_in_client_list_dup, logged_in_client_list);
+	char *list_id, *hostname, *ip_addr, *port_num;
+	int i = 1;
+	do {
+		// printf("%s\n", "CHECK START ");
+		if(i == 1) {
+		   list_id = strtok(logged_in_client_list_dup, " ");
+		} else {
+		   list_id = strtok(NULL, " ");
+		}
+
+		if(list_id == NULL)
+			break;
+
+		hostname = strtok(NULL, " ");
+		ip_addr = strtok(NULL, " ");
+
+			// printf("%s : %s\n", ip_addr, ip);
+		if(strcmp(ip_addr, ip) == 0) {
+			// printf("%s : %s\n", ip_addr, ip);
+			free(ip);
+			return 1;
+		}
+		port_num = strtok(NULL, " ");
+		i++;
+	} while(logged_in_client_list_dup != NULL);
+	// printf("Not present in logged in client list");
+	free(ip);
+	return 0;
+	// return 1;
+}
+
+
 
 void logout_cmd(fd_set *master_list) {
+	print_success("LOGOUT");
 	FD_CLR(server_descriptor_global, master_list);
 	close(server_descriptor_global);
+	print_end("LOGOUT");
+//	printf("%s\n", "logged out");
 }
 
-void exit_cmd() {
-	printf("%s\n", "Closing the application...!!!");
+void exit_cmd(fd_set *master_list) {
+	print_success("EXIT");
+	FD_CLR(server_descriptor_global, master_list);
+	close(server_descriptor_global);
+	print_end("EXIT");
+//	printf("%s\n", "Closing the application...!!!");
 	exit(0);
 }
 
 void receive_cmd(int i) {
-	printf("%s\n", "Receiving messages...");
+	// printf("%s\n", "Receiving messages...");
 	char *received_message = (char *)malloc(sizeof(char)*1024);
 	if(recv(i, received_message, 1024, 0) == 0) {
 			server_descriptor_global = -1;
-			printf("%s\n", "Connection Terminated");
+			//printf("%s\n", "Connection Terminated");
 	} else {
+		// printf("rec msg : %s\n", received_message);
 		char *action = strtok(received_message, " ");
 		char* rem_msg = remaining_msg();
-		printf("%s\n", rem_msg);
+		//printf("%s\n", rem_msg);
 		handle_client_msg(action, rem_msg);
 	}
 }
 
 void handle_client_msg(char *action, char *msg) {
 	if(strcmp(action, "LIST") == 0) {
-		print_list(msg);
+		strcpy(logged_in_client_list, msg);
+		if(list_await) {
+			list_await = false;
+			print_success("REFRESH");
+			// print_list(msg);
+			print_end("REFRESH");
+		}
 	} else {
-		printf("%s\n", msg);
+		print_success("RECEIVED");
+		printf("msg from:%s\n[msg]:%s\n", action, msg);
+		print_end("RECEIVED");
 	}
 }
 
@@ -511,6 +758,18 @@ void print(char *action, char *message, bool status) {
 	} else {
 		printf("[%s:ERROR]\n", action);
 	}
+	printf("[%s:END]\n", action);
+}
+
+void print_success(char *action) {
+	printf("[%s:SUCCESS]\n", action);
+}
+
+void print_error(char *action) {
+	printf("[%s:ERROR]\n", action);
+}
+
+void print_end(char *action) {
 	printf("[%s:END]\n", action);
 }
 
@@ -600,13 +859,22 @@ struct client* find_client_node_by_descriptor(int descriptor) {
 	return temp;
 }
 
-struct client* create_client_node(int descriptor, char *hostname, char *ip_address, char *port) {
+struct client* find_client_node_by_ip(char* ip) {
+	struct client *temp = logged_in_client_list_head;
+	while (temp != NULL && (strcmp(temp->ip, ip) != 0)) {
+		temp = temp->next;
+	}
+	return temp;
+}
+
+struct client* create_client_node(int descriptor, char *hostname, char *ip_address, char *port, bool is_loggedin) {
 	struct client* new_client = (struct client *)malloc(sizeof(struct client *));
 	new_client->descriptor = descriptor;
 	strcpy(new_client->hostname, hostname);
 	strcpy(new_client->ip, ip_address);
-	strcpy(new_client->port, port);
+	//strcpy(new_client->port, port);
 	// new_client->port = port;
 	new_client->next = NULL;
+	new_client->is_loggedin = is_loggedin;
 	return new_client;
 }
