@@ -33,8 +33,8 @@
 #include <stdbool.h>
 
 
-//#include "../include/global.h"
-//#include "../include/logger.h"
+#include "../include/global.h"
+#include "../include/logger.h"
 
 struct client *logged_in_client_list_head;
 int server_descriptor_global = -1;
@@ -116,10 +116,10 @@ struct client* find_client_node_by_ip(char* ip);
 
 int main(int argc, char **argv) {
 	/*Init. Logger*/
-	//cse4589_init_log(argv[2]);
+	cse4589_init_log(argv[2]);
 
 	/*Clear LOGFILE*/
-	//fclose(fopen(LOGFILE, "w"));
+	fclose(fopen(LOGFILE, "w"));
 
 	/*Start Here*/
 
