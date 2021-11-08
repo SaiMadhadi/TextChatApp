@@ -663,6 +663,7 @@ void send_cmd(char input_dup[]) {
 		// cse4589_print_and_log("%s\n", "You are not logged in...!!!");
 		print_error("SEND");
 		print_end("SEND");
+		return;
 	} else {
 		if(send_prevalidations(msg_dup)) {
 			// cse4589_print_and_log("Message to be sent is : %s, len : %lu\n", msg, strlen(msg));
@@ -670,14 +671,17 @@ void send_cmd(char input_dup[]) {
 					// cse4589_print_and_log("%s\n", "Send Failed...!!!");
 					print_error("SEND");
 					print_end("SEND");
+				return;
 			} else {
 				// cse4589_print_and_log("%s\n", "Message sent...!!!");
-				print_success("SEND");
-				print_end("SEND");
+				//print_success("SEND");
+				//print_end("SEND");
+				return;
 			}
 		} else {
 			print_error("SEND");
 			print_end("SEND");
+			return;
 		}
 	}
 
