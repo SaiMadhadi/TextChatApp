@@ -33,8 +33,8 @@
 #include <stdbool.h>
 
 
-//#include "../include/global.h"
-//#include "../include/logger.h"
+#include "../include/global.h"
+#include "../include/logger.h"
 
 struct client *logged_in_client_list_head;
 int server_descriptor_global = -1;
@@ -115,16 +115,17 @@ struct client* find_client_node_by_ip(char* ip);
  };
 
 int main(int argc, char **argv) {
-	/*Init. Logger*/
-	//cse4589_init_log(argv[2]);
+
+  /*Init. Logger*/
+	cse4589_init_log(argv[2]);
 
 	/*Clear LOGFILE*/
-	//fclose(fopen(LOGFILE, "w"));
+	fclose(fopen(LOGFILE, "w"));
 
 	/*Start Here*/
 
 	if(argc != 3) {
-			printf("Please enter c/s & port number\n");
+			cse4589_print_and_log("Please enter c/s & port number\n");
 			exit(1);
 	}
 
@@ -132,7 +133,7 @@ int main(int argc, char **argv) {
 	struct sockaddr_in host_addr;
 
 	if((host_socket_descriptor = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
-		printf("Socket creation failed...!!!\n");
+		cse4589_print_and_log("Socket creation failed...!!!\n");
 		exit(1);
 	}
 
@@ -141,12 +142,12 @@ int main(int argc, char **argv) {
 	host_addr.sin_addr.s_addr = INADDR_ANY;
 
 	if(bind(host_socket_descriptor, (struct sockaddr *)&host_addr, sizeof(host_addr)) < 0) {
-		printf("Bind failed...!!!\n");
+		cse4589_print_and_log("Bind failed...!!!\n");
 		exit(1);
 	}
 
 	if(listen(host_socket_descriptor, 4) < 0) {
-		printf("Listen failed...!!!\n");
+		cse4589_print_and_log("Listen failed...!!!\n");
 		exit(1);
 	}
 
@@ -162,7 +163,7 @@ int main(int argc, char **argv) {
 }
 
 void server(int host_socket_descriptor, char* port) {
-	// printf("I am server...!!! \n");
+	// cse4589_print_and_log("I am server...!!! \n");
 	fd_set master_list, watch_list;
 	FD_ZERO(&master_list);
 	FD_ZERO(&watch_list);
@@ -175,17 +176,17 @@ void server(int host_socket_descriptor, char* port) {
     fflush(stdout);
 		watch_list = master_list;
 		if(select(cmax+1, &watch_list, NULL, NULL, NULL) < 0) {
-			// printf("%s\n", "Error occured");
+			// cse4589_print_and_log("%s\n", "Error occured");
 		} else {
 			for(int i = 0; i <= cmax+1; i++) {
 				if(FD_ISSET(i, &watch_list)) {
 					if(i == 0) {
 						char input[256];
 						if(fgets(input, 256, stdin) == 0) {
-							// printf("%s\n", "No Input");
+							// cse4589_print_and_log("%s\n", "No Input");
 							break;
 						} else {
-							// printf("Given command :: %s\n", input);
+							// cse4589_print_and_log("Given command :: %s\n", input);
 							char *action = strtok(input, " ");
 							if (strcmp(action, "AUTHOR\n") == 0) {
 								author_cmd();
@@ -206,20 +207,20 @@ void server(int host_socket_descriptor, char* port) {
 						}
 					} else if (i == host_socket_descriptor) {
 						// accept connections
-						// printf("%s\n", "Accepting new connections...");
+						// cse4589_print_and_log("%s\n", "Accepting new connections...");
 						struct sockaddr_in client_addr;
 						int caddr_len = sizeof(client_addr);
 						int client_descriptor = accept(host_socket_descriptor, (struct sockaddr *)&client_addr, (socklen_t*)&caddr_len);
 						//client_descriptor_global = client_descriptor;
 						FD_SET(client_descriptor, &master_list);
-						// printf("%s\n", "Server accepted client connection...!!!");
+						// cse4589_print_and_log("%s\n", "Server accepted client connection...!!!");
 						char ipv4[20];
 						inet_ntop(AF_INET, &(client_addr.sin_addr), ipv4, INET_ADDRSTRLEN);
-						// printf("Client IP : %s, Port : %d, %d\n", ipv4, client_addr.sin_port, ntohs(client_addr.sin_port));
+						// cse4589_print_and_log("Client IP : %s, Port : %d, %d\n", ipv4, client_addr.sin_port, ntohs(client_addr.sin_port));
 						if(client_descriptor > cmax)
 							cmax = client_descriptor;
 						struct hostent *host = gethostbyaddr(&(client_addr.sin_addr), sizeof(client_addr.sin_addr), AF_INET);
-					  // printf("Host name: %s\n", host->h_name);
+					  // cse4589_print_and_log("Host name: %s\n", host->h_name);
 						struct client* new_client = create_client_node(client_descriptor, host->h_name ,ipv4, "8080", true);
 						insert_to_logged_in_clients(new_client);
 						//send_list(client_descriptor);
@@ -248,20 +249,20 @@ void client(int host_socket_descriptor, char* port) {
     fflush(stdout);
 		watch_list = master_list;
 		if(select(cmax+1, &watch_list, NULL, NULL, NULL) < 0) {
-			// printf("%s\n", "Error occured");
+			// cse4589_print_and_log("%s\n", "Error occured");
 		} else {
 				for(int i = 0; i <= cmax+1; i++) {
 					if(FD_ISSET(i, &watch_list)) {
 						if(i == 0) {
 							char input[256];
 							if(fgets(input, 256, stdin) == 0) {
-								//printf("%s\n", "No Input");
+								//cse4589_print_and_log("%s\n", "No Input");
 								break;
 							} else {
-								//printf("Given command :: %s\n", input);
+								//cse4589_print_and_log("Given command :: %s\n", input);
 								char input_dup[256];
 								strcpy(input_dup, input);
-								// printf("INPUT_DUP IS %s\n", input_dup);
+								// cse4589_print_and_log("INPUT_DUP IS %s\n", input_dup);
 								char *action = strtok(input, " ");
 								if (strcmp(action, "AUTHOR\n") == 0) {
 									author_cmd();
@@ -331,7 +332,7 @@ void print_statistics() {
 	int list_id=1;
 	struct client* node = logged_in_client_list_head;
 	while(node!=NULL) {
-		printf("%-5d%-35s%-8d%-8d%-8s\n", list_id++, node->hostname, node->num_msgs_sent, node->num_msgs_recv, (node->is_loggedin)?"logged-in":"logged-out");
+		cse4589_print_and_log("%-5d%-35s%-8d%-8d%-8s\n", list_id++, node->hostname, node->num_msgs_sent, node->num_msgs_recv, (node->is_loggedin)?"logged-in":"logged-out");
 		node=node->next;
 	}
 }
@@ -341,44 +342,44 @@ void send_port(char* port) {
 	strcat(message, "PORT ");
 	strcat(message, port);
 	if(send(server_descriptor_global, message, sizeof(message), 0) == -1){
-		// printf("send failed\n");
+		// cse4589_print_and_log("send failed\n");
 	} else {
-		// printf("%s\n", "Port sent..!!!");
+		// cse4589_print_and_log("%s\n", "Port sent..!!!");
 	}
 }
 
 void req_for_list() {
 	char* action = "LIST\n";
 	if(server_descriptor_global == -1) {
-		//printf("%s\n", "You are not logged in...!!!");
+		//cse4589_print_and_log("%s\n", "You are not logged in...!!!");
 		print_error("REFRESH");
 		print_end("REFRESH");
 	} else {
 		if(send(server_descriptor_global, action, strlen(action), 0) == -1) {
-			//printf("%s\n", "Send Failed...!!!");
+			//cse4589_print_and_log("%s\n", "Send Failed...!!!");
 			print_error("REFRESH");
 			print_end("REFRESH");
 		} else {
-			//printf("%s\n", "Message sent...!!!");
+			//cse4589_print_and_log("%s\n", "Message sent...!!!");
 		}
 	}
 }
 
 void receive_cmd_server(int client_descriptor, fd_set *master_list) {
-	// printf("%s\n", "Receiving messages...");
+	// cse4589_print_and_log("%s\n", "Receiving messages...");
 	char *received_message = (char *)malloc(sizeof(char)*1024);
 	int recv_ret = recv(client_descriptor, received_message, 1024, 0);
   fflush(stdout);
   fflush(stdin);
-	// printf("Received message : %s\n", received_message);
+	// cse4589_print_and_log("Received message : %s\n", received_message);
 	if(recv_ret < 0) {
-			// printf("%s\n", "receive failed");
+			// cse4589_print_and_log("%s\n", "receive failed");
 	} else if(recv_ret == 0) {
 		// Loggedout
 		// change is_loggedin to 0;
 		FD_CLR(client_descriptor, master_list);
 		find_client_node_by_descriptor(client_descriptor)->is_loggedin = false;
-		// printf("client %d logged out\n", client_descriptor);
+		// cse4589_print_and_log("client %d logged out\n", client_descriptor);
 	} else {
 		handle_server_msg(client_descriptor, received_message);
 	}
@@ -387,9 +388,9 @@ void receive_cmd_server(int client_descriptor, fd_set *master_list) {
 
 void handle_server_msg(int client_descriptor, char *received_message) {
 	//char *action = strtok(received_message, " ");
-	//printf("action is : %s\n", received_message);
+	//cse4589_print_and_log("action is : %s\n", received_message);
 	if(strcmp(received_message, "LIST\n") == 0) {
-		// printf("%s\n", "SENDING LIST");
+		// cse4589_print_and_log("%s\n", "SENDING LIST");
 		send_list(client_descriptor);
 	} else if(strcmp(received_message, "REFRESH\n") == 0) {
 		send_list(client_descriptor);
@@ -405,7 +406,7 @@ void handle_server_msg(int client_descriptor, char *received_message) {
 		char recv_msg_dup[256];
 		strcpy(recv_msg_dup, received_message);
 		char *action = strtok(received_message, " ");
-		// printf("%s, %d\n", action, strcmp(action, "PORT"));
+		// cse4589_print_and_log("%s, %d\n", action, strcmp(action, "PORT"));
 		if(strcmp(action, "PORT") == 0) {
 			struct client* cl = find_client_node_by_descriptor(client_descriptor);
 			char* port_num = strtok(NULL, " ");
@@ -431,14 +432,14 @@ void handle_server_msg(int client_descriptor, char *received_message) {
 			struct client* cl = find_client_node_by_descriptor(client_descriptor);
 			cl->num_msgs_sent++;
 			if(send(dest_cli_desc, recv_msg_dup, strlen(recv_msg_dup), 0) < 0) {
-				// printf("%s\n", "Delivery to client failed\n");
+				// cse4589_print_and_log("%s\n", "Delivery to client failed\n");
 				print_error("RELAYED");
 				print_end("RELAYED");
 			} else {
-				// printf("%s\n", "Delivered to client...");
+				// cse4589_print_and_log("%s\n", "Delivered to client...");
 				dest->num_msgs_recv++;
 				print_success("RELAYED");
-				printf("msg from:%s, to:%s\n[msg]:%s\n", action, dest->ip, msg);
+				cse4589_print_and_log("msg from:%s, to:%s\n[msg]:%s\n", action, dest->ip, msg);
 				print_end("RELAYED");
 			}
 			// free(msg);
@@ -447,7 +448,7 @@ void handle_server_msg(int client_descriptor, char *received_message) {
 }
 
 void send_list(int client_descriptor) {
-	// printf("%s\n", "Sending list to server");
+	// cse4589_print_and_log("%s\n", "Sending list to server");
 	struct client* temp = logged_in_client_list_head;
 	// char buffer[1024];
 	char *buffer = (char *)malloc(sizeof(char)*1024);
@@ -475,15 +476,15 @@ void send_list(int client_descriptor) {
 		}
 		temp=temp->next;
 	}
-	// printf("sending list : %s\n", buffer);
+	// cse4589_print_and_log("sending list : %s\n", buffer);
 	int srv = send(client_descriptor, buffer, strlen(buffer), 0);
 	free(buffer);
 	if(srv == -1){
-		// printf("send failed\n");
+		// cse4589_print_and_log("send failed\n");
 	} else if (srv == 0) {
-		// printf("%s\n", "nothing sent");
+		// cse4589_print_and_log("%s\n", "nothing sent");
 	} else {
-		// printf("%s\n", "List sent...!!!");
+		// cse4589_print_and_log("%s\n", "List sent...!!!");
 	}
 }
 
@@ -504,7 +505,7 @@ void print_list(char *buffer) {
 		hostname = strtok(NULL, " ");
 		ip_addr = strtok(NULL, " ");
 		port_num = strtok(NULL, " ");
-		printf("%-5d%-35s%-20s%-8d\n", atoi(list_id), hostname, ip_addr, atoi(port_num));
+		cse4589_print_and_log("%-5d%-35s%-20s%-8d\n", atoi(list_id), hostname, ip_addr, atoi(port_num));
 		i++;
 	} while(buffer != NULL);
 }
@@ -515,7 +516,7 @@ void list_cmd_server() {
 	int list_id = 1;
 	while(temp != NULL) {
 		if(temp->is_loggedin)
-		printf("%-5d%-35s%-20s%-8d\n", list_id++, temp->hostname, temp->ip, atoi(temp->port));
+		cse4589_print_and_log("%-5d%-35s%-20s%-8d\n", list_id++, temp->hostname, temp->ip, atoi(temp->port));
 		temp=temp->next;
 	}
   print_end("LIST");
@@ -562,7 +563,7 @@ int login_cmd(fd_set *master_list, int cmax) {
 	char server_ip_dup[256], server_port_dup[256];
 	strcpy(server_ip_dup, server_ip);
 	strcpy(server_port_dup, server_port);
-	// printf("server port:%s\n", server_port_dup);
+	// cse4589_print_and_log("server port:%s\n", server_port_dup);
 	if(!(ip_validation(server_ip_dup) && port_validation(server_port_dup))) {
 		print_error("LOGIN");
 		print_end("LOGIN");
@@ -573,20 +574,20 @@ int login_cmd(fd_set *master_list, int cmax) {
 	FD_SET(server_descriptor, master_list);
 	if(server_descriptor > cmax)
 		cmax = server_descriptor;
-	//printf("Logging in now... server Ip : %s & server port %s\n", server_ip, server_port);
+	//cse4589_print_and_log("Logging in now... server Ip : %s & server port %s\n", server_ip, server_port);
 	struct sockaddr_in server_addr;
 	server_addr.sin_family = AF_INET;
 	server_addr.sin_port = htons(atoi(server_port));
 	inet_pton(AF_INET, server_ip, &(server_addr.sin_addr));
 	if (connect(server_descriptor, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0){
-		// printf("%s\n", "Connect Failed...!!!!");
+		// cse4589_print_and_log("%s\n", "Connect Failed...!!!!");
 		print_error("LOGIN");
 		print_end("LOGIN");
     return -1;
 	} else {
 		print_success("LOGIN");
 		print_end("LOGIN");
-		// printf("%s\n", "Connected successfully");
+		// cse4589_print_and_log("%s\n", "Connected successfully");
 	}
 	return cmax;
 }
@@ -606,7 +607,7 @@ void send_cmd(char input_dup[]) {
 	// 	strcat(msg, token);
 	// 	flag = 1;
 	// } while(token != NULL);
-	// printf("input_dup is %s, %d\n", input_dup, strlen(input_dup));
+	// cse4589_print_and_log("input_dup is %s, %d\n", input_dup, strlen(input_dup));
 	char msg[256];
 	int i = 0;
 	while(input_dup[i+5] != '\0') {
@@ -614,24 +615,24 @@ void send_cmd(char input_dup[]) {
 		i++;
 	}
 	msg[i-1] = '\0';
-	// printf("Message to be sent is : %s, len : %d\n", msg, strlen(msg));
+	// cse4589_print_and_log("Message to be sent is : %s, len : %d\n", msg, strlen(msg));
 	// char *msg_dup = (char *)malloc(sizeof(char)*1024);
   char msg_dup[strlen(msg)];
   strcpy(msg_dup, msg);
 
 	if(server_descriptor_global == -1) {
-		// printf("%s\n", "You are not logged in...!!!");
+		// cse4589_print_and_log("%s\n", "You are not logged in...!!!");
 		print_error("SEND");
 		print_end("SEND");
 	} else {
 		if(send_prevalidations(msg_dup)) {
-			// printf("Message to be sent is : %s, len : %lu\n", msg, strlen(msg));
+			// cse4589_print_and_log("Message to be sent is : %s, len : %lu\n", msg, strlen(msg));
 			if(send(server_descriptor_global, msg, strlen(msg), 0) == -1) {
-					// printf("%s\n", "Send Failed...!!!");
+					// cse4589_print_and_log("%s\n", "Send Failed...!!!");
 					print_error("SEND");
 					print_end("SEND");
 			} else {
-				// printf("%s\n", "Message sent...!!!");
+				// cse4589_print_and_log("%s\n", "Message sent...!!!");
 				print_success("SEND");
 				print_end("SEND");
 			}
@@ -646,12 +647,12 @@ void send_cmd(char input_dup[]) {
 }
 
 int send_prevalidations(char *msg) {
-	// printf("ENTERED PREVALIDATIONS OF SEND\n");
+	// cse4589_print_and_log("ENTERED PREVALIDATIONS OF SEND\n");
 	char *ip = strtok(msg, " ");
 	// char *ip_dup = (char *)malloc(sizeof(char)*256);
   char ip_dup[strlen(ip)];
 	strcpy(ip_dup, ip);
-	// printf("IP is : %s\n", ip);
+	// cse4589_print_and_log("IP is : %s\n", ip);
 	return ip_validation(ip) && check_in_logged_in_list(ip_dup);
 }
 
@@ -690,18 +691,18 @@ int ip_validation(char* ip) {
 	if(dots_count != 3){
 		return 0;
 	}
-	// printf("%s\n", "IP VALIDATION PASSED");
+	// cse4589_print_and_log("%s\n", "IP VALIDATION PASSED");
 	return 1;
 }
 
 int port_validation(char *port) {
-	// printf("port is %d\n", atoi(port));
+	// cse4589_print_and_log("port is %d\n", atoi(port));
 	int size = strlen(port);
 	if(size > 5) return 0;
 	// digit check
 	for(int i=0;i<size;i++){
 		if(!(port[i] >= '0' && port[i] <= '9')){
-			// printf("FAILED IN DIGIT CHECK :%c\n", port[i]);
+			// cse4589_print_and_log("FAILED IN DIGIT CHECK :%c\n", port[i]);
 			return 0;
 		}
 	}
@@ -717,7 +718,7 @@ int check_in_logged_in_list(char *ip) {
 	char *list_id, *hostname, *ip_addr, *port_num;
 	int i = 1;
 	do {
-		// printf("%s\n", "CHECK START ");
+		// cse4589_print_and_log("%s\n", "CHECK START ");
 		if(i == 1) {
 		   list_id = strtok(logged_in_client_list_dup, " ");
 		} else {
@@ -730,16 +731,16 @@ int check_in_logged_in_list(char *ip) {
 		hostname = strtok(NULL, " ");
 		ip_addr = strtok(NULL, " ");
 
-			// printf("%s : %s\n", ip_addr, ip);
+			// cse4589_print_and_log("%s : %s\n", ip_addr, ip);
 		if(strcmp(ip_addr, ip) == 0) {
-			// printf("%s : %s\n", ip_addr, ip);
+			// cse4589_print_and_log("%s : %s\n", ip_addr, ip);
 			// free(ip);
 			return 1;
 		}
 		port_num = strtok(NULL, " ");
 		i++;
 	} while(logged_in_client_list_dup != NULL);
-	// printf("Not present in logged in client list");
+	// cse4589_print_and_log("Not present in logged in client list");
 	// free(ip);
 	return 0;
 	// return 1;
@@ -753,7 +754,7 @@ void logout_cmd(fd_set *master_list) {
 	close(server_descriptor_global);
   server_descriptor_global = -1;
 	print_end("LOGOUT");
-//	printf("%s\n", "logged out");
+//	cse4589_print_and_log("%s\n", "logged out");
 }
 
 void exit_cmd(fd_set *master_list) {
@@ -761,21 +762,21 @@ void exit_cmd(fd_set *master_list) {
 	FD_CLR(server_descriptor_global, master_list);
 	close(server_descriptor_global);
 	print_end("EXIT");
-//	printf("%s\n", "Closing the application...!!!");
+//	cse4589_print_and_log("%s\n", "Closing the application...!!!");
 	exit(0);
 }
 
 void receive_cmd(int i) {
-	// printf("%s\n", "Receiving messages...");
+	// cse4589_print_and_log("%s\n", "Receiving messages...");
 	char *received_message = (char *)malloc(sizeof(char)*1024);
 	if(recv(i, received_message, 1024, 0) == 0) {
 			server_descriptor_global = -1;
-			//printf("%s\n", "Connection Terminated");
+			//cse4589_print_and_log("%s\n", "Connection Terminated");
 	} else {
-		// printf("rec msg : %s\n", received_message);
+		// cse4589_print_and_log("rec msg : %s\n", received_message);
 		char *action = strtok(received_message, " ");
 		char* rem_msg = remaining_msg();
-		//printf("%s\n", rem_msg);
+		//cse4589_print_and_log("%s\n", rem_msg);
 		handle_client_msg(action, rem_msg);
 	}
 }
@@ -793,7 +794,7 @@ void handle_client_msg(char *action, char *msg) {
 		}
 	} else {
 		print_success("RECEIVED");
-		printf("msg from:%s\n[msg]:%s\n", action, msg);
+		cse4589_print_and_log("msg from:%s\n[msg]:%s\n", action, msg);
 		print_end("RECEIVED");
 	}
 }
@@ -817,24 +818,24 @@ char* remaining_msg() {
 
 void print(char *action, char *message, bool status) {
 	if(status) {
-		printf("[%s:SUCCESS]\n", action);
-		printf("%s\n", message);
+		cse4589_print_and_log("[%s:SUCCESS]\n", action);
+		cse4589_print_and_log("%s\n", message);
 	} else {
-		printf("[%s:ERROR]\n", action);
+		cse4589_print_and_log("[%s:ERROR]\n", action);
 	}
-	printf("[%s:END]\n", action);
+	cse4589_print_and_log("[%s:END]\n", action);
 }
 
 void print_success(char *action) {
-	printf("[%s:SUCCESS]\n", action);
+	cse4589_print_and_log("[%s:SUCCESS]\n", action);
 }
 
 void print_error(char *action) {
-	printf("[%s:ERROR]\n", action);
+	cse4589_print_and_log("[%s:ERROR]\n", action);
 }
 
 void print_end(char *action) {
-	printf("[%s:END]\n", action);
+	cse4589_print_and_log("[%s:END]\n", action);
 }
 
 char* get_host_ip_address() {
