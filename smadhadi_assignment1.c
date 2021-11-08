@@ -54,7 +54,7 @@ void receive_cmd_server(int client_descriptor, fd_set *master_list);
 void logout_cmd(fd_set *master_list);
 void exit_cmd(fd_set *master_list);
 void list_cmd_server();
-void handle_server_msg(int client_descriptor, char *received_message);
+void handle_server_msg(int client_descriptor, char received_message[]);
 void handle_client_msg(char *action, char *msg);
 void send_list(int client_descriptor);
 void print_list(char *buffer);
@@ -71,10 +71,10 @@ int ip_validation(char* ip);
 int port_validation(char* ip);
 int valid_part(char *ipv);
 
-struct client* create_client_node(int descriptor, char *hostname, char *ip_address, char *port,  bool is_loggedin);
+struct client* create_client_node(int descriptor, char hostname[], char ip_address[], char port[],  bool is_loggedin);
 void insert_to_logged_in_clients(struct client* new_client);
 struct client* find_client_node_by_descriptor(int descriptor);
-struct client* find_client_node_by_ip(char* ip);
+struct client* find_client_node_by_ip(char ip[]);
 
 
 /**
@@ -115,7 +115,8 @@ struct client* find_client_node_by_ip(char* ip);
  };
 
 int main(int argc, char **argv) {
-	/*Init. Logger*/
+
+  /*Init. Logger*/
 	cse4589_init_log(argv[2]);
 
 	/*Clear LOGFILE*/
@@ -180,8 +181,9 @@ void server(int host_socket_descriptor, char* port) {
 			for(int i = 0; i <= cmax+1; i++) {
 				if(FD_ISSET(i, &watch_list)) {
 					if(i == 0) {
-						char input[256];
-						if(fgets(input, 256, stdin) == 0) {
+						char input[1024];
+            input[0]='\0';
+						if(fgets(input, 1024, stdin) == 0) {
 							// cse4589_print_and_log("%s\n", "No Input");
 							break;
 						} else {
@@ -213,9 +215,10 @@ void server(int host_socket_descriptor, char* port) {
 						//client_descriptor_global = client_descriptor;
 						FD_SET(client_descriptor, &master_list);
 						// cse4589_print_and_log("%s\n", "Server accepted client connection...!!!");
-						// char ipv4[20];
+						char ipv4[20];
+            ipv4[0]='\0';
             // cse4589_print_and_log("cl desc %d\n", client_descriptor);
-            char *ipv4 = (char *)malloc(sizeof(char)*30);
+            // char *ipv4 = (char *)malloc(sizeof(char)*30);
 						inet_ntop(AF_INET, &(client_addr.sin_addr), ipv4, INET_ADDRSTRLEN);
 						// cse4589_print_and_log("Client IP : %s, Port : %d, %d\n", ipv4, client_addr.sin_port, ntohs(client_addr.sin_port));
 						if(client_descriptor > cmax)
@@ -223,17 +226,17 @@ void server(int host_socket_descriptor, char* port) {
 						struct hostent *host = gethostbyaddr(&(client_addr.sin_addr), sizeof(client_addr.sin_addr), AF_INET);
 					  // cse4589_print_and_log("Host name: %s\n", host->h_name);
             struct client* cl = find_client_node_by_ip(ipv4);
-            if(cl== NULL) {
+            if(cl == NULL) {
               // cse4589_print_and_log("%s\n", "NEW");
                 struct client* new_client = create_client_node(client_descriptor, host->h_name ,ipv4, "8080", true);
 						    insert_to_logged_in_clients(new_client);
             } else {
               // cse4589_print_and_log("%s\n", "OLD");
               cl->is_loggedin = true;
-              cl->client_descriptor=client_descriptor;
+              cl->descriptor = client_descriptor;
               // cse4589_print_and_log("%s\n", "OLD DONE");
             }
-            free(ipv4);
+            // free(ipv4);
 						//send_list(client_descriptor);
 					} else {
 						// receive, parse and send.
@@ -265,13 +268,15 @@ void client(int host_socket_descriptor, char* port) {
 				for(int i = 0; i <= cmax+1; i++) {
 					if(FD_ISSET(i, &watch_list)) {
 						if(i == 0) {
-							char input[256];
-							if(fgets(input, 256, stdin) == 0) {
+							char input[1024];
+              input[0]='\0';
+							if(fgets(input, 1024, stdin) == 0) {
 								//cse4589_print_and_log("%s\n", "No Input");
 								break;
 							} else {
 								//cse4589_print_and_log("Given command :: %s\n", input);
-								char input_dup[256];
+								char input_dup[1024];
+                input_dup[0]='\0';
 								strcpy(input_dup, input);
 								// cse4589_print_and_log("INPUT_DUP IS %s\n", input_dup);
 								char *action = strtok(input, " ");
@@ -304,6 +309,7 @@ void client(int host_socket_descriptor, char* port) {
 										print("LIST", " " ,0);
 									} else {
 										char list_temp[256];
+                    list_temp[0]='\0';
 										strcpy(list_temp, logged_in_client_list);
 										print_success("LIST");
 										print_list(list_temp);
@@ -340,9 +346,9 @@ void client(int host_socket_descriptor, char* port) {
 }
 
 void print_statistics() {
-	int list_id=1;
+	int list_id = 1;
 	struct client* node = logged_in_client_list_head;
-	while(node!=NULL) {
+	while(node != NULL) {
 		cse4589_print_and_log("%-5d%-35s%-8d%-8d%-8s\n", list_id++, node->hostname, node->num_msgs_sent, node->num_msgs_recv, (node->is_loggedin)?"logged-in":"logged-out");
 		node=node->next;
 	}
@@ -350,8 +356,10 @@ void print_statistics() {
 
 void send_port(char* port) {
 	char message[20];
+  message[0]='\0';
 	strcat(message, "PORT ");
 	strcat(message, port);
+  // cse4589_print_and_log("msg for : %s\n", message);
 	if(send(server_descriptor_global, message, sizeof(message), 0) == -1){
 		// cse4589_print_and_log("send failed\n");
 	} else {
@@ -360,7 +368,7 @@ void send_port(char* port) {
 }
 
 void req_for_list() {
-	char* action = "LIST\n";
+	char action[10] = "LIST\n";
 	if(server_descriptor_global == -1) {
 		//cse4589_print_and_log("%s\n", "You are not logged in...!!!");
 		print_error("REFRESH");
@@ -378,8 +386,11 @@ void req_for_list() {
 
 void receive_cmd_server(int client_descriptor, fd_set *master_list) {
 	// cse4589_print_and_log("%s\n", "Receiving messages...");
-	char *received_message = (char *)malloc(sizeof(char)*1024);
-	int recv_ret = recv(client_descriptor, received_message, 1024, 0);
+	//char *received_message = (char *)malloc(sizeof(char)*1024);
+  //received_message[0]='\0';
+  char received_message[1024];
+  received_message[0]='\0';
+  int recv_ret = recv(client_descriptor, received_message, 1024, 0);
   fflush(stdout);
   fflush(stdin);
 	// cse4589_print_and_log("Received message : %s\n", received_message);
@@ -395,10 +406,10 @@ void receive_cmd_server(int client_descriptor, fd_set *master_list) {
     received_message[recv_ret] = '\0';
 		handle_server_msg(client_descriptor, received_message);
 	}
-	free(received_message);
+	// free(received_message);
 }
 
-void handle_server_msg(int client_descriptor, char *received_message) {
+void handle_server_msg(int client_descriptor, char received_message[]) {
 	//char *action = strtok(received_message, " ");
 	// cse4589_print_and_log("action is : %s\n", received_message);
 	if(strcmp(received_message, "LIST\n") == 0) {
@@ -415,7 +426,8 @@ void handle_server_msg(int client_descriptor, char *received_message) {
 	//
 	} else {
 		// Send to another client
-		char recv_msg_dup[256];
+		char recv_msg_dup[1024];
+    recv_msg_dup[0]='\0';
 		strcpy(recv_msg_dup, received_message);
 		char *action = strtok(received_message, " ");
 		// cse4589_print_and_log("%s, %d\n", action, strcmp(action, "PORT"));
@@ -429,13 +441,20 @@ void handle_server_msg(int client_descriptor, char *received_message) {
 		} else {
 			// char *dest_ip = strtok(NULL, " ");;
 			// char *msg = remaining_msg();
-			char msg[256];
+      struct client* cl = find_client_node_by_descriptor(client_descriptor);
+			char msg[1024];
+      msg[0]='\0';
 			int i = 0, len = strlen(action);
 			while(recv_msg_dup[i+len] != '\0') {
 				msg[i] = recv_msg_dup[i+len];
 				i++;
 			}
 			msg[i]='\0';
+      char msg_with_ip[1024];
+      msg_with_ip[0]='\0';
+      strcat(msg_with_ip, cl->ip);
+      strcat(msg_with_ip," ");
+      strcat(msg_with_ip, msg);
 			struct client* dest = find_client_node_by_ip(action);
       if(!dest->is_loggedin) {
         print_error("RELAYED");
@@ -443,9 +462,9 @@ void handle_server_msg(int client_descriptor, char *received_message) {
         return;
       }
 			int dest_cli_desc = dest->descriptor;
-			struct client* cl = find_client_node_by_descriptor(client_descriptor);
+			//struct client* cl = find_client_node_by_descriptor(client_descriptor);
 			cl->num_msgs_sent++;
-			if(send(dest_cli_desc, recv_msg_dup, strlen(recv_msg_dup), 0) < 0) {
+			if(send(dest_cli_desc, msg_with_ip, strlen(msg_with_ip), 0) < 0) {
 				// cse4589_print_and_log("%s\n", "Delivery to client failed\n");
 				print_error("RELAYED");
 				print_end("RELAYED");
@@ -464,8 +483,9 @@ void handle_server_msg(int client_descriptor, char *received_message) {
 void send_list(int client_descriptor) {
 	// cse4589_print_and_log("%s\n", "Sending list to server");
 	struct client* temp = logged_in_client_list_head;
-	// char buffer[1024];
-	char *buffer = (char *)malloc(sizeof(char)*1024);
+	char buffer[1024];
+	// char *buffer = (char *)malloc(sizeof(char)*1024);
+  buffer[0]='\0';
 	int i = 1;
 	strcat(buffer, "LIST ");
 	while(temp != NULL){
@@ -490,9 +510,10 @@ void send_list(int client_descriptor) {
 		}
 		temp=temp->next;
 	}
+  // buffer[strlen(buffer)]='\0';
 	// cse4589_print_and_log("sending list : %s\n", buffer);
 	int srv = send(client_descriptor, buffer, strlen(buffer), 0);
-	free(buffer);
+	// free(buffer);
 	if(srv == -1){
 		// cse4589_print_and_log("send failed\n");
 	} else if (srv == 0) {
@@ -575,6 +596,8 @@ int login_cmd(fd_set *master_list, int cmax) {
   }
 	// validations
 	char server_ip_dup[256], server_port_dup[256];
+  server_ip_dup[0]='\0';
+  server_port_dup[0]='\0';
 	strcpy(server_ip_dup, server_ip);
 	strcpy(server_port_dup, server_port);
 	// cse4589_print_and_log("server port:%s\n", server_port_dup);
@@ -622,7 +645,8 @@ void send_cmd(char input_dup[]) {
 	// 	flag = 1;
 	// } while(token != NULL);
 	// cse4589_print_and_log("input_dup is %s, %d\n", input_dup, strlen(input_dup));
-	char msg[256];
+	char msg[1024];
+  msg[0]='\0';
 	int i = 0;
 	while(input_dup[i+5] != '\0') {
 		msg[i] = input_dup[i+5];
@@ -632,6 +656,7 @@ void send_cmd(char input_dup[]) {
 	// cse4589_print_and_log("Message to be sent is : %s, len : %d\n", msg, strlen(msg));
 	// char *msg_dup = (char *)malloc(sizeof(char)*1024);
   char msg_dup[strlen(msg)];
+  msg_dup[0]='\0';
   strcpy(msg_dup, msg);
 
 	if(server_descriptor_global == -1) {
@@ -665,6 +690,7 @@ int send_prevalidations(char *msg) {
 	char *ip = strtok(msg, " ");
 	// char *ip_dup = (char *)malloc(sizeof(char)*256);
   char ip_dup[strlen(ip)];
+  ip_dup[0]='\0';
 	strcpy(ip_dup, ip);
 	// cse4589_print_and_log("IP is : %s\n", ip);
 	return ip_validation(ip) && check_in_logged_in_list(ip_dup);
@@ -728,6 +754,7 @@ int port_validation(char *port) {
 
 int check_in_logged_in_list(char *ip) {
 	char logged_in_client_list_dup[256];
+  logged_in_client_list_dup[0]='\0';
 	strcpy(logged_in_client_list_dup, logged_in_client_list);
 	char *list_id, *hostname, *ip_addr, *port_num;
 	int i = 1;
@@ -782,19 +809,23 @@ void exit_cmd(fd_set *master_list) {
 
 void receive_cmd(int i) {
 	// cse4589_print_and_log("%s\n", "Receiving messages...");
-	char *received_message = (char *)malloc(sizeof(char)*1024);
+	// char *received_message = (char *)malloc(sizeof(char)*1024);
+  char received_message[1024];
+  received_message[0]='\0';
   int recv_ret = recv(i, received_message, 1024, 0);
 	if(recv_ret == 0) {
 			server_descriptor_global = -1;
 			//cse4589_print_and_log("%s\n", "Connection Terminated");
 	} else {
-		// cse4589_print_and_log("rec msg : %s\n", received_message);
     received_message[recv_ret]='\0';
-    char received_message_dup[400];
+    // cse4589_print_and_log("rec msg : %s\n", received_message);
+    char received_message_dup[1024];
+    received_message_dup[0]='\0';
     strcpy(received_message_dup, received_message);
 		char *action = strtok(received_message, " ");
 		//char* rem_msg = remaining_msg();
-    char msg[400];
+    char msg[1024];
+    msg[0]='\0';
   	int i = 0;
   	while(received_message_dup[i+strlen(action)] != '\0') {
   		msg[i] = received_message_dup[i+strlen(action)];
@@ -804,13 +835,16 @@ void receive_cmd(int i) {
 		//cse4589_print_and_log("%s\n", rem_msg);
 		handle_client_msg(action, msg);
 	}
+  // free(received_message);
 }
 
 void handle_client_msg(char *action, char *msg) {
 	if(strcmp(action, "LIST") == 0) {
     free(logged_in_client_list);
-    logged_in_client_list = (char *)malloc(sizeof(char)*strlen(msg));
+    logged_in_client_list = (char *)malloc(sizeof(char)*strlen(msg)+1);
+    logged_in_client_list[0]='\0';
 		strcpy(logged_in_client_list, msg);
+    // logged_in_client_list[strlen(msg)]='\0';
 		if(list_await) {
 			list_await = false;
 			print_success("REFRESH");
@@ -826,7 +860,7 @@ void handle_client_msg(char *action, char *msg) {
 
 char* remaining_msg() {
 	char *token;
-	int flag=0;
+	int flag = 0;
 	char *msg = (char *)malloc(sizeof(char)*1024);
 	do {
 		token = strtok(NULL, " ");
@@ -949,7 +983,7 @@ struct client* find_client_node_by_descriptor(int descriptor) {
 	return temp;
 }
 
-struct client* find_client_node_by_ip(char* ip) {
+struct client* find_client_node_by_ip(char ip[]) {
 	struct client *temp = logged_in_client_list_head;
 	while (temp != NULL && (strcmp(temp->ip, ip) != 0)) {
 		temp = temp->next;
@@ -957,7 +991,7 @@ struct client* find_client_node_by_ip(char* ip) {
 	return temp;
 }
 
-struct client* create_client_node(int descriptor, char *hostname, char *ip_address, char *port, bool is_loggedin) {
+struct client* create_client_node(int descriptor, char hostname[], char ip_address[], char port[], bool is_loggedin) {
 	struct client* new_client = (struct client *)malloc(sizeof(struct client));
 	new_client->descriptor = descriptor;
 	strcpy(new_client->hostname, hostname);
