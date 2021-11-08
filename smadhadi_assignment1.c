@@ -33,8 +33,8 @@
 #include <stdbool.h>
 
 
-#include "../include/global.h"
-#include "../include/logger.h"
+//#include "../include/global.h"
+//#include "../include/logger.h"
 
 struct client *logged_in_client_list_head;
 int server_descriptor_global = -1;
@@ -115,12 +115,11 @@ struct client* find_client_node_by_ip(char* ip);
  };
 
 int main(int argc, char **argv) {
-
-  /*Init. Logger*/
-	cse4589_init_log(argv[2]);
+	/*Init. Logger*/
+	//cse4589_init_log(argv[2]);
 
 	/*Clear LOGFILE*/
-	fclose(fopen(LOGFILE, "w"));
+	//fclose(fopen(LOGFILE, "w"));
 
 	/*Start Here*/
 
@@ -214,15 +213,27 @@ void server(int host_socket_descriptor, char* port) {
 						//client_descriptor_global = client_descriptor;
 						FD_SET(client_descriptor, &master_list);
 						// cse4589_print_and_log("%s\n", "Server accepted client connection...!!!");
-						char ipv4[20];
+						// char ipv4[20];
+            // cse4589_print_and_log("cl desc %d\n", client_descriptor);
+            char *ipv4 = (char *)malloc(sizeof(char)*30);
 						inet_ntop(AF_INET, &(client_addr.sin_addr), ipv4, INET_ADDRSTRLEN);
 						// cse4589_print_and_log("Client IP : %s, Port : %d, %d\n", ipv4, client_addr.sin_port, ntohs(client_addr.sin_port));
 						if(client_descriptor > cmax)
 							cmax = client_descriptor;
 						struct hostent *host = gethostbyaddr(&(client_addr.sin_addr), sizeof(client_addr.sin_addr), AF_INET);
 					  // cse4589_print_and_log("Host name: %s\n", host->h_name);
-						struct client* new_client = create_client_node(client_descriptor, host->h_name ,ipv4, "8080", true);
-						insert_to_logged_in_clients(new_client);
+            struct client* cl = find_client_node_by_ip(ipv4);
+            if(cl== NULL) {
+              // cse4589_print_and_log("%s\n", "NEW");
+                struct client* new_client = create_client_node(client_descriptor, host->h_name ,ipv4, "8080", true);
+						    insert_to_logged_in_clients(new_client);
+            } else {
+              // cse4589_print_and_log("%s\n", "OLD");
+              cl->is_loggedin = true;
+              cl->client_descriptor=client_descriptor;
+              // cse4589_print_and_log("%s\n", "OLD DONE");
+            }
+            free(ipv4);
 						//send_list(client_descriptor);
 					} else {
 						// receive, parse and send.
@@ -381,6 +392,7 @@ void receive_cmd_server(int client_descriptor, fd_set *master_list) {
 		find_client_node_by_descriptor(client_descriptor)->is_loggedin = false;
 		// cse4589_print_and_log("client %d logged out\n", client_descriptor);
 	} else {
+    received_message[recv_ret] = '\0';
 		handle_server_msg(client_descriptor, received_message);
 	}
 	free(received_message);
@@ -388,7 +400,7 @@ void receive_cmd_server(int client_descriptor, fd_set *master_list) {
 
 void handle_server_msg(int client_descriptor, char *received_message) {
 	//char *action = strtok(received_message, " ");
-	//cse4589_print_and_log("action is : %s\n", received_message);
+	// cse4589_print_and_log("action is : %s\n", received_message);
 	if(strcmp(received_message, "LIST\n") == 0) {
 		// cse4589_print_and_log("%s\n", "SENDING LIST");
 		send_list(client_descriptor);
@@ -409,6 +421,8 @@ void handle_server_msg(int client_descriptor, char *received_message) {
 		// cse4589_print_and_log("%s, %d\n", action, strcmp(action, "PORT"));
 		if(strcmp(action, "PORT") == 0) {
 			struct client* cl = find_client_node_by_descriptor(client_descriptor);
+      // if(cl==NULL)
+      // cse4589_print_and_log("%s\n", "cl is null");
 			char* port_num = strtok(NULL, " ");
 			strcpy(cl->port, port_num);
 			send_list(client_descriptor);
@@ -739,7 +753,7 @@ int check_in_logged_in_list(char *ip) {
 		}
 		port_num = strtok(NULL, " ");
 		i++;
-	} while(logged_in_client_list_dup != NULL);
+	} while(1);
 	// cse4589_print_and_log("Not present in logged in client list");
 	// free(ip);
 	return 0;
@@ -769,15 +783,26 @@ void exit_cmd(fd_set *master_list) {
 void receive_cmd(int i) {
 	// cse4589_print_and_log("%s\n", "Receiving messages...");
 	char *received_message = (char *)malloc(sizeof(char)*1024);
-	if(recv(i, received_message, 1024, 0) == 0) {
+  int recv_ret = recv(i, received_message, 1024, 0);
+	if(recv_ret == 0) {
 			server_descriptor_global = -1;
 			//cse4589_print_and_log("%s\n", "Connection Terminated");
 	} else {
 		// cse4589_print_and_log("rec msg : %s\n", received_message);
+    received_message[recv_ret]='\0';
+    char received_message_dup[400];
+    strcpy(received_message_dup, received_message);
 		char *action = strtok(received_message, " ");
-		char* rem_msg = remaining_msg();
+		//char* rem_msg = remaining_msg();
+    char msg[400];
+  	int i = 0;
+  	while(received_message_dup[i+strlen(action)] != '\0') {
+  		msg[i] = received_message_dup[i+strlen(action)];
+  		i++;
+  	}
+    msg[i]='\0';
 		//cse4589_print_and_log("%s\n", rem_msg);
-		handle_client_msg(action, rem_msg);
+		handle_client_msg(action, msg);
 	}
 }
 
