@@ -472,7 +472,7 @@ void handle_server_msg(int client_descriptor, char received_message[]) {
 				// cse4589_print_and_log("%s\n", "Delivered to client...");
 				dest->num_msgs_recv++;
 				print_success("RELAYED");
-				cse4589_print_and_log("msg from:%s, to:%s\n[msg]:%s\n", action, dest->ip, msg);
+				cse4589_print_and_log("msg from:%s, to:%s\n[msg]:%s\n", cl->ip, action, msg);
 				print_end("RELAYED");
 			}
 			// free(msg);
@@ -674,8 +674,8 @@ void send_cmd(char input_dup[]) {
 				return;
 			} else {
 				// cse4589_print_and_log("%s\n", "Message sent...!!!");
-				//print_success("SEND");
-				//print_end("SEND");
+				print_success("SEND");
+				print_end("SEND");
 				return;
 			}
 		} else {
