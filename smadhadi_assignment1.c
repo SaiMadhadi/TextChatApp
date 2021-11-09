@@ -121,7 +121,7 @@ struct client* find_client_node_by_ip(char ip[]);
 	 int num_msgs_sent;
 	 bool is_loggedin;
 	 char blocked_client_list[1024];
-	 char buffer[260000];
+	 char buffer[26000];
    	 char type[2048];
    	 int count_buffer_messages;
 	 struct client *next;
@@ -382,7 +382,7 @@ void client(int host_socket_descriptor, char* port) {
 
 void send_messages_in_buffer(int dest_cli_desc) {
   int count = 0;
-  char messages[260000];
+  char messages[26000];
   messages[0] = '\0';
   struct client* cl = find_client_node_by_descriptor(dest_cli_desc);
   strcpy(messages, cl->buffer);
@@ -420,7 +420,7 @@ void send_messages_in_buffer(int dest_cli_desc) {
         rem_msg[k] = msg[i+1];
         i++;k++;
       }
-      rem_msg[i] = '\0';
+      rem_msg[k] = '\0';
 
       if(send(cl->descriptor, msg, strlen(msg), 0) < 0) {
         print_error("RELAYED");
@@ -428,7 +428,7 @@ void send_messages_in_buffer(int dest_cli_desc) {
       } else {
         cl->num_msgs_recv++;
         print_success("RELAYED");
-        printf("msg from:%s, to:%s\n[msg]:%s\n", dest_ip , cl->type[ctr]=='O'?cl->ip:"255.255.255.255", rem_msg);
+        cse4589_print_and_log("msg from:%s, to:%s\n[msg]:%s\n", dest_ip , cl->type[ctr]=='O'?cl->ip:"255.255.255.255", rem_msg);
         print_end("RELAYED");
       }
       ctr++;
