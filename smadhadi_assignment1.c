@@ -346,12 +346,14 @@ void client(int host_socket_descriptor, char* port) {
 }
 
 void print_statistics() {
+print_success("STATISTICS");
 	int list_id = 1;
 	struct client* node = logged_in_client_list_head;
 	while(node != NULL) {
 		cse4589_print_and_log("%-5d%-35s%-8d%-8d%-8s\n", list_id++, node->hostname, node->num_msgs_sent, node->num_msgs_recv, (node->is_loggedin)?"logged-in":"logged-out");
 		node=node->next;
 	}
+print_end("STATISTICS");
 }
 
 void send_port(char* port) {
@@ -445,8 +447,8 @@ void handle_server_msg(int client_descriptor, char received_message[]) {
 			char msg[1024];
       msg[0]='\0';
 			int i = 0, len = strlen(action);
-			while(recv_msg_dup[i+len] != '\0') {
-				msg[i] = recv_msg_dup[i+len];
+			while(recv_msg_dup[i+len+1] != '\0') {
+				msg[i] = recv_msg_dup[i+len+1];
 				i++;
 			}
 			msg[i]='\0';
@@ -831,8 +833,8 @@ void receive_cmd(int i) {
     char msg[1024];
     msg[0]='\0';
   	int i = 0;
-  	while(received_message_dup[i+strlen(action)] != '\0') {
-  		msg[i] = received_message_dup[i+strlen(action)];
+  	while(received_message_dup[i+strlen(action)+1] != '\0') {
+  		msg[i] = received_message_dup[i+strlen(action)+1];
   		i++;
   	}
     msg[i]='\0';
