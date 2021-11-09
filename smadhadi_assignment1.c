@@ -40,6 +40,7 @@ struct client *logged_in_client_list_head;
 int server_descriptor_global = -1;
 bool list_await = false;
 char *logged_in_client_list;
+char blocked_client_list[1024];
 void server(int socket_descriptor, char* port);
 void client(int socket_descriptor, char* port);
 void print(char *action, char *message, bool status);
@@ -50,6 +51,7 @@ void ip_cmd();
 int login_cmd(fd_set *master_list, int cmax);
 void send_cmd(char input_dup[]);
 void receive_cmd(int i);
+void broadcast_cmd(char input_dup[]);
 void receive_cmd_server(int client_descriptor, fd_set *master_list);
 void logout_cmd(fd_set *master_list);
 void broadcast_cmd(char input_dup[]);
@@ -71,6 +73,12 @@ int check_in_logged_in_list(char *ip);
 int ip_validation(char* ip);
 int port_validation(char* ip);
 int valid_part(char *ipv);
+void block_cmd(char input_dup[]);
+void unblock_cmd(char input_dup[]);
+void blocked_cmd();
+int check_in_blocked_list(char *ip, char *blocked_list);
+void remove_from_blocked_client_list(char *ip, char* blocked_client_list);
+int check_in_all_client_list(char* ip);
 
 struct client* create_client_node(int descriptor, char hostname[], char ip_address[], char port[],  bool is_loggedin);
 void insert_to_logged_in_clients(struct client* new_client);
@@ -112,6 +120,7 @@ struct client* find_client_node_by_ip(char ip[]);
 	 int num_msgs_recv;
 	 int num_msgs_sent;
 	 bool is_loggedin;
+	 char blocked_client_list[1024];
 	 struct client *next;
  };
 
@@ -205,6 +214,8 @@ void server(int host_socket_descriptor, char* port) {
 								print_success("EXIT");
 								print_end("EXIT");
 								exit(0);
+							} else if(strcmp(action, "BLOCKED") == 0) {
+								blocked_cmd();
 							}
 						}
 					} else if (i == host_socket_descriptor) {
@@ -258,6 +269,7 @@ void client(int host_socket_descriptor, char* port) {
 	FD_SET(0, &master_list);
   FD_SET(host_socket_descriptor, &master_list);
   logged_in_client_list = (char *)malloc(sizeof(char)*1024);
+	blocked_client_list[0]='\0';
 	int cmax = 0;
 	while(1) {
     fflush(stdin);
@@ -311,6 +323,18 @@ void client(int host_socket_descriptor, char* port) {
 									} else {
 										broadcast_cmd(input_dup);
 									}
+								} else if (strcmp(action, "BLOCK") == 0) {
+									if(server_descriptor_global == -1) {
+										print("BLOCK", " " ,0);
+									} else {
+										block_cmd(input_dup);
+									}
+								} else if (strcmp(action, "UNBLOCK") == 0) {
+									if(server_descriptor_global == -1) {
+										print("UNBLOCK", " " ,0);
+									} else {
+										unblock_cmd(input_dup);
+									}
 								} else if(strcmp(action, "LIST\n") == 0) {
 									if(server_descriptor_global == -1) {
 										print("LIST", " " ,0);
@@ -350,6 +374,197 @@ void client(int host_socket_descriptor, char* port) {
 				}
 		}
 	}
+}
+
+void blocked_cmd() {
+  char *ip = strtok(NULL, " ");
+  ip[strlen(ip)-1] = '\0';
+  //printf("IP :%s\n", ip);
+  char ip_dup[30];
+  strcpy(ip_dup, ip);
+  if(!ip_validation(ip_dup)) {
+    print_error("BLOCKED");
+    print_end("BLOCKED");
+    return;
+  }
+ // printf("%s\n", "IP VALIDATION PASSED");
+
+  if(!check_in_all_client_list(ip)) {
+    print_error("BLOCKED");
+    print_end("BLOCKED");
+    return;
+  }
+
+  struct client* c = find_client_node_by_ip(ip);
+  print_success("BLOCKED");
+  struct client* temp = logged_in_client_list_head;
+  int list_id = 1;
+  while(temp != NULL) {
+    if(check_in_blocked_list(temp->ip, c->blocked_client_list)) {
+      cse4589_print_and_log("%-5d%-35s%-20s%-8d\n", list_id++, temp->hostname, temp->ip, atoi(temp->port));
+    }
+    temp=temp->next;
+  }
+  print_end("BLOCKED");
+}
+
+int check_in_all_client_list(char* ip) {
+  struct client* temp = logged_in_client_list_head;
+  while(temp!=NULL) {
+   // printf("%s : %s\n", temp->ip, ip);
+    if(strcmp(ip, temp->ip) == 0)
+      return 1;
+    temp=temp->next;
+  }
+  return 0;
+}
+
+void block_cmd(char input_dup[]) {
+  input_dup[strlen(input_dup)-1]='\0';
+  char dup[1024];
+  dup[0]='\0';
+  strcpy(dup, input_dup);
+  char *action = strtok(dup, " ");
+  char *ip = strtok(NULL, " ");
+  // printf("%s is ip\n", ip);
+  char ip_dup[20];
+  strcpy(ip_dup, ip);
+
+  if(!ip_validation(ip_dup)) {
+    print_error("BLOCK");
+    print_end("BLOCK");
+    return;
+  }
+
+
+    // printf("%s\n", "ip_validation passed");
+
+  if(!check_in_logged_in_list(ip)) {
+    print_error("BLOCK");
+    print_end("BLOCK");
+    return;
+  }
+
+  // printf("%s\n", "logged in list passed");
+
+  if(check_in_blocked_list(ip, blocked_client_list)) {
+    print_error("BLOCK");
+    print_end("BLOCK");
+    return;
+  }
+
+  if(send(server_descriptor_global, input_dup, strlen(input_dup), 0) == -1){
+    // printf("send failed\n");
+    print_error("BLOCK");
+    print_end("BLOCK");
+  } else {
+    // printf("%s\n", "Port sent..!!!");
+    if(strlen(blocked_client_list) != 0)
+      strcat(blocked_client_list, ",");
+    strcat(blocked_client_list, ip);
+
+    print_success("BLOCK");
+    print_end("BLOCK");
+  }
+
+ // printf("%s\n", blocked_client_list);
+
+}
+
+void unblock_cmd(char input_dup[]) {
+  input_dup[strlen(input_dup)-1]='\0';
+  char dup[1024];
+  dup[0]='\0';
+  strcpy(dup, input_dup);
+  char *action = strtok(dup, " ");
+  char *ip = strtok(NULL, " ");
+
+  char ip_dup[20];
+  strcpy(ip_dup, ip);
+  if(!ip_validation(ip_dup)) {
+    print_error("UNBLOCK");
+    print_end("UNBLOCK");
+    return;
+  }
+
+  if(!check_in_logged_in_list(ip)) {
+    print_error("UNBLOCK");
+    print_end("UNBLOCK");
+    return;
+  }
+
+  if(!check_in_blocked_list(ip, blocked_client_list)) {
+    print_error("UNBLOCK");
+    print_end("UNBLOCK");
+    return;
+  }
+
+  if(send(server_descriptor_global, input_dup, strlen(input_dup), 0) == -1){
+    // printf("send failed\n");
+    print_error("UNBLOCK");
+    print_end("UNBLOCK");
+  } else {
+    // REMOVE FROM LIST....
+    remove_from_blocked_client_list(ip, blocked_client_list);
+    print_success("UNBLOCK");
+    print_end("UNBLOCK");
+  }
+  // printf("%s\n", blocked_client_list);
+}
+
+void remove_from_blocked_client_list(char *ip, char* blocked_client_list) {
+  char temp_block_list[1024];
+  temp_block_list[0] = '\0';
+  strcpy(temp_block_list, blocked_client_list);
+  char temp_block_list_build[1024];
+  temp_block_list_build[0] = '\0';
+
+  char *token;
+  int i = 1;
+  do {
+    if(i==1) {
+      token = strtok(temp_block_list, ",");
+    } else {
+      token = strtok(NULL, " ");
+    }
+    i++;
+    if(token == NULL)
+      break;
+
+    if(strcmp(token, ip) != 0) {
+        strcat(temp_block_list_build, token);
+        strcat(temp_block_list_build, ",");
+    }
+  } while(1);
+  // printf("after removal : %s\n", temp_block_list_build);
+  //temp_block_list_build[strlen(temp_block_list_build)-1]='\0';
+  // free(blocked_client_list);
+  // blocked_client_list = (char *)malloc(sizeof(char)*1024);
+  blocked_client_list[0] = '\0';
+  strcpy(blocked_client_list, temp_block_list_build);
+  // printf("after removal : %s\n", blocked_client_list);
+}
+
+int check_in_blocked_list(char *ip, char *blocked_client_list) {
+  char blocked_client_list_dup[1024];
+  blocked_client_list_dup[0]='\0';
+  strcpy(blocked_client_list_dup, blocked_client_list);
+  char *token;
+  int i=1;
+  do {
+    if(i==1) {
+      token = strtok(blocked_client_list_dup, " ");
+    } else {
+      token = strtok(NULL, " ");
+    }
+    i++;
+    if(token == NULL)
+      break;
+
+    if(strcmp(token, ip) == 0)
+      return 1;
+  } while(1);
+  return 0;
 }
 
 void print_statistics() {
@@ -469,6 +684,7 @@ void handle_server_msg(int client_descriptor, char received_message[]) {
         struct client* t1 = logged_in_client_list_head;
         int flag = 0;
         while(t1!=NULL) {
+	if(!check_in_blocked_list(cl->ip, dest->blocked_client_list)) {
           if(t1->is_loggedin && t1->descriptor!=client_descriptor) {
             if(send(t1->descriptor, msg_with_ip, strlen(msg_with_ip), 0) < 0) {
               // printf("%s\n", "Delivery to client failed\n");
@@ -479,6 +695,7 @@ void handle_server_msg(int client_descriptor, char received_message[]) {
           } else {
             // store in buffer if t1->descriptor!=client_descriptor.
           }
+	}
           t1=t1->next;
         }
 
@@ -488,7 +705,35 @@ void handle_server_msg(int client_descriptor, char received_message[]) {
 	print_end("RELAYED");
         }
 
-    } else {
+    } else if(strcmp(action, "BLOCK") == 0) {
+      struct client* cl = find_client_node_by_descriptor(client_descriptor);
+      char ip[1024];
+      ip[0]='\0';
+			int i = 0, len = strlen(action);
+			while(recv_msg_dup[i+len+1] != '\0') {
+				ip[i] = recv_msg_dup[i+len+1];
+				i++;
+			}
+			ip[i]='\0';
+      // printf("bll l :%lu\n", strlen(cl->blocked_client_list));
+      if(strlen(cl->blocked_client_list) != 0)
+        strcat(cl->blocked_client_list, ",");
+      strcat(cl->blocked_client_list, ip);
+      // printf("BL : %s\n", cl->blocked_client_list);
+
+    } else if(strcmp(action, "UNBLOCK") == 0) {
+      struct client* cl = find_client_node_by_descriptor(client_descriptor);
+      char ip[1024];
+      ip[0]='\0';
+			int i = 0, len = strlen(action);
+			while(recv_msg_dup[i+len+1] != '\0') {
+				ip[i] = recv_msg_dup[i+len+1];
+				i++;
+			}
+			ip[i]='\0';
+      remove_from_blocked_client_list(ip, cl->blocked_client_list);
+
+    }else {
 			// char *dest_ip = strtok(NULL, " ");;
 			// char *msg = remaining_msg();
       struct client* cl = find_client_node_by_descriptor(client_descriptor);
@@ -514,6 +759,7 @@ void handle_server_msg(int client_descriptor, char received_message[]) {
 			int dest_cli_desc = dest->descriptor;
 			//struct client* cl = find_client_node_by_descriptor(client_descriptor);
 			cl->num_msgs_sent++;
+			if(!check_in_blocked_list(cl->ip, dest->blocked_client_list)) {
 			if(send(dest_cli_desc, msg_with_ip, strlen(msg_with_ip), 0) < 0) {
 				// cse4589_print_and_log("%s\n", "Delivery to client failed\n");
 				print_error("RELAYED");
@@ -524,6 +770,7 @@ void handle_server_msg(int client_descriptor, char received_message[]) {
 				print_success("RELAYED");
 				cse4589_print_and_log("msg from:%s, to:%s\n[msg]:%s\n", cl->ip, action, msg);
 				print_end("RELAYED");
+			}
 			}
 			// free(msg);
 		}
