@@ -52,6 +52,7 @@ void send_cmd(char input_dup[]);
 void receive_cmd(int i);
 void receive_cmd_server(int client_descriptor, fd_set *master_list);
 void logout_cmd(fd_set *master_list);
+void broadcast_cmd(char input_dup[]);
 void exit_cmd(fd_set *master_list);
 void list_cmd_server();
 void handle_server_msg(int client_descriptor, char received_message[]);
@@ -304,6 +305,12 @@ void client(int host_socket_descriptor, char* port) {
 									} else {
 										send_cmd(input_dup);
 									}
+								} else if (strcmp(action, "BROADCAST") == 0) {
+									if(server_descriptor_global == -1) {
+										print("BROADCAST", " " ,0);
+									} else {
+										broadcast_cmd(input_dup);
+									}
 								} else if(strcmp(action, "LIST\n") == 0) {
 									if(server_descriptor_global == -1) {
 										print("LIST", " " ,0);
@@ -440,7 +447,48 @@ void handle_server_msg(int client_descriptor, char received_message[]) {
 			char* port_num = strtok(NULL, " ");
 			strcpy(cl->port, port_num);
 			send_list(client_descriptor);
-		} else {
+		} else if(strcmp(action, "BROADCAST") == 0) {
+        // add from ip to msg and send as usual.
+       // printf("%s\n", "Entered broadcasT");
+        struct client* cl = find_client_node_by_descriptor(client_descriptor);
+        cl->num_msgs_sent++;
+  			char msg[1024];
+        msg[0]='\0';
+  			int i = 0, len = strlen(action);
+  			while(recv_msg_dup[i+len+1] != '\0') {
+  				msg[i] = recv_msg_dup[i+len+1];
+  				i++;
+  			}
+  			msg[i]='\0';
+        char msg_with_ip[1024];
+        msg_with_ip[0]='\0';
+        strcat(msg_with_ip, cl->ip);
+        strcat(msg_with_ip," ");
+        strcat(msg_with_ip, msg);
+
+        struct client* t1 = logged_in_client_list_head;
+        int flag = 0;
+        while(t1!=NULL) {
+          if(t1->is_loggedin && t1->descriptor!=client_descriptor) {
+            if(send(t1->descriptor, msg_with_ip, strlen(msg_with_ip), 0) < 0) {
+              // printf("%s\n", "Delivery to client failed\n");
+            } else {
+              flag = 1;
+              t1->num_msgs_recv++;
+            }
+          } else {
+            // store in buffer if t1->descriptor!=client_descriptor.
+          }
+          t1=t1->next;
+        }
+
+        if(flag) {
+          print_success("RELAYED");
+	cse4589_print_and_log("msg from:%s, to:%s\n[msg]:%s\n", cl->ip, "255.255.255.255", msg);
+	print_end("RELAYED");
+        }
+
+    } else {
 			// char *dest_ip = strtok(NULL, " ");;
 			// char *msg = remaining_msg();
       struct client* cl = find_client_node_by_descriptor(client_descriptor);
@@ -480,6 +528,22 @@ void handle_server_msg(int client_descriptor, char received_message[]) {
 			// free(msg);
 		}
 	}
+}
+
+void broadcast_cmd(char input_dup[]) {
+  //printf("input :%s, %lu", input_dup, strlen(input_dup));
+  input_dup[strlen(input_dup)-1]='\0';
+  //printf("input :%s, %lu", input_dup, strlen(input_dup));
+
+  if(send(server_descriptor_global, input_dup, strlen(input_dup), 0) == -1) {
+      // printf("%s\n", "Send Failed...!!!");
+      print_error("BROADCAST");
+      print_end("BROADCAST");
+  } else {
+    // printf("%s\n", "Message sent...!!!");
+    print_success("BROADCAST");
+    print_end("BROADCAST");
+  }
 }
 
 void send_list(int client_descriptor) {
