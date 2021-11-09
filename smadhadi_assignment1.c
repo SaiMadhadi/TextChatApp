@@ -684,18 +684,18 @@ void handle_server_msg(int client_descriptor, char received_message[]) {
         struct client* t1 = logged_in_client_list_head;
         int flag = 0;
         while(t1!=NULL) {
-	if(!check_in_blocked_list(cl->ip, dest->blocked_client_list)) {
-          if(t1->is_loggedin && t1->descriptor!=client_descriptor) {
-            if(send(t1->descriptor, msg_with_ip, strlen(msg_with_ip), 0) < 0) {
-              // printf("%s\n", "Delivery to client failed\n");
+          if(!check_in_blocked_list(cl->ip, t1->blocked_client_list)) {
+            if(t1->is_loggedin && t1->descriptor!=client_descriptor) {
+              if(send(t1->descriptor, msg_with_ip, strlen(msg_with_ip), 0) < 0) {
+                // printf("%s\n", "Delivery to client failed\n");
+              } else {
+                flag = 1;
+                t1->num_msgs_recv++;
+              }
             } else {
-              flag = 1;
-              t1->num_msgs_recv++;
+              // store in buffer if t1->descriptor!=client_descriptor.
             }
-          } else {
-            // store in buffer if t1->descriptor!=client_descriptor.
           }
-	}
           t1=t1->next;
         }
 
