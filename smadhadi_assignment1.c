@@ -79,6 +79,7 @@ void blocked_cmd();
 int check_in_blocked_list(char *ip, char *blocked_list);
 void remove_from_blocked_client_list(char *ip, char* blocked_client_list);
 int check_in_all_client_list(char* ip);
+void send_messages_in_buffer(int dest_cli_desc);
 
 struct client* create_client_node(int descriptor, char hostname[], char ip_address[], char port[],  bool is_loggedin);
 void insert_to_logged_in_clients(struct client* new_client);
@@ -106,7 +107,6 @@ struct client* find_client_node_by_ip(char ip[]);
 	* Counter in select call - done
 	* Store messages of logged out clients, Max of 100 Buffered messages.
 	* List - done
-	* rename cmax
 	* send message properly - done
 	* LOGOUT - EXIT impl ******
 	* send port
@@ -121,6 +121,9 @@ struct client* find_client_node_by_ip(char ip[]);
 	 int num_msgs_sent;
 	 bool is_loggedin;
 	 char blocked_client_list[1024];
+	 char buffer[2048];
+   	 char type[2048];
+   	 int count_buffer_messages;
 	 struct client *next;
  };
 
@@ -374,6 +377,66 @@ void client(int host_socket_descriptor, char* port) {
 				}
 		}
 	}
+}
+
+
+void send_messages_in_buffer(int dest_cli_desc) {
+  int count = 0;
+  char messages[2048];
+  messages[0] = '\0';
+  struct client* cl = find_client_node_by_descriptor(dest_cli_desc);
+  strcpy(messages, cl->buffer);
+  char *msg;
+
+  if(cl->count_buffer_messages > 0) {
+    int ctr = 0;
+    do {
+
+      int p = 0;
+      while(p++ < 100000000);
+
+      char dest_ip[100], rem_msg[1024];
+      // dest_ip[0] = '\0';
+
+      if(count == 0) {
+        msg = strtok(messages, "---");
+        count++;
+      } else {
+        msg = strtok(NULL, "---");
+      }
+
+      if(msg == NULL)
+        break;
+
+      int i = 0;
+      while(msg[i] != ' ') {
+        dest_ip[i] = msg[i];
+        i++;
+      }
+      dest_ip[i] = '\0';
+
+      int k = 0;
+      while(msg[i+1] != '\0') {
+        rem_msg[k] = msg[i+1];
+        i++;k++;
+      }
+      rem_msg[i] = '\0';
+
+      if(send(cl->descriptor, msg, strlen(msg), 0) < 0) {
+        print_error("RELAYED");
+        print_end("RELAYED");
+      } else {
+        cl->num_msgs_recv++;
+        print_success("RELAYED");
+        printf("msg from:%s, to:%s\n[msg]:%s\n", dest_ip , cl->type[ctr]=='O'?cl->ip:"255.255.255.255", rem_msg);
+        print_end("RELAYED");
+      }
+      ctr++;
+    } while(1);
+  }
+  cl->buffer[0]='\0';
+  cl->count_buffer_messages = 0;
+  // strcpy(cl->buffer, '\0');
 }
 
 void blocked_cmd() {
@@ -694,6 +757,16 @@ void handle_server_msg(int client_descriptor, char received_message[]) {
               }
             } else {
               // store in buffer if t1->descriptor!=client_descriptor.
+		    if(!t1->is_loggedin) {
+                if(strlen(t1->buffer) == 0) {
+                   t1->buffer[0] = '\0';
+                } else {
+                   strcat(t1->buffer, "---");
+                }
+                strcat(t1->buffer, msg_with_ip);
+                strcat(t1->type, "B");
+                t1->count_buffer_messages++;
+              }
             }
           }
           t1=t1->next;
@@ -760,7 +833,21 @@ void handle_server_msg(int client_descriptor, char received_message[]) {
 			//struct client* cl = find_client_node_by_descriptor(client_descriptor);
 			cl->num_msgs_sent++;
 			if(!check_in_blocked_list(cl->ip, dest->blocked_client_list)) {
-			if(send(dest_cli_desc, msg_with_ip, strlen(msg_with_ip), 0) < 0) {
+			if(!dest->is_loggedin) {
+
+         if(strlen(dest->buffer) == 0) {
+            dest->buffer[0]='\0';
+          } else {
+            strcat(dest->buffer, "---");
+          }
+          strcat(dest->buffer, msg_with_ip);
+          strcat(dest->type, "O");
+          dest->count_buffer_messages++;
+          return;
+        }
+				
+				
+				if(send(dest_cli_desc, msg_with_ip, strlen(msg_with_ip), 0) < 0) {
 				// cse4589_print_and_log("%s\n", "Delivery to client failed\n");
 				print_error("RELAYED");
 				print_end("RELAYED");
